@@ -1,0 +1,24 @@
+# Windows
+Thumbs.db
+desktop.ini
+
+# Office temporales
+~$*.docx
+~$*.doc
+
+# Documentos Word (se entregan en AAI aparte)
+*.docx
+
+# Android Studio / Gradle
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+.cxx/
+captures/
+*.apk
+*.aab
+
+# Logs
+*.log
