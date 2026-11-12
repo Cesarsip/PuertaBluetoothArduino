@@ -194,14 +194,6 @@ fun PantallaPuerta(usuario: String, onSalir: () -> Unit = {}) {
                     fontWeight = FontWeight.Bold,
                     color = if (conectado) Color(0xFF2E7D32) else Color(0xFFC62828)
                 )
-                Button(
-                    onClick = {
-                        if (conectado) gestor.desconectar() else solicitarConexion()
-                    },
-                    enabled = estado != "Conectando..."
-                ) {
-                    Text(if (conectado) "Desconectar" else "Conectar")
-                }
             }
         }
 
@@ -280,6 +272,23 @@ fun PantallaPuerta(usuario: String, onSalir: () -> Unit = {}) {
             Text(
                 text = if (puertaAbierta) "Bloquear Puerta" else "Abrir Puerta",
                 fontSize = 18.sp
+            )
+        }
+
+        // Botón de conexión: lo dejo abajo y ancho para que en el celular
+        // el texto Conectar/Desconectar no se parta en dos líneas.
+        Button(
+            onClick = {
+                if (conectado) gestor.desconectar() else solicitarConexion()
+            },
+            enabled = estado != "Conectando...",
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+        ) {
+            Text(
+                text = if (conectado) "Desconectar" else "Conectar",
+                fontSize = 16.sp
             )
         }
 
