@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 // Pantalla de Login: solo deja pasar a quien tenga usuario y contraseña válidos.
+// Si se equivocan 3 veces seguidas, bloqueo el ingreso (máximo 3 intentos)
+// para que nadie pueda adivinar la contraseña probando una y otra vez.
 @Composable
 fun PantallaLogin(alIngresar: (String) -> Unit) {
     val contexto = LocalContext.current
@@ -33,6 +35,11 @@ fun PantallaLogin(alIngresar: (String) -> Unit) {
     var usuario by remember { mutableStateOf("") }
     var clave by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
+
+    // Contador de intentos fallidos: empieza en 0 y con 3 se bloquea.
+    // Como es "remember", el contador vuelve a 0 si se cierra la aplicación.
+    var intentos by remember { mutableStateOf(0) }
+    var bloqueado by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -91,21 +98,34 @@ fun PantallaLogin(alIngresar: (String) -> Unit) {
 
         // Al presionar Ingresar: valido contra SQLite y, si coincide, registro
         // el evento de sesión con el nombre de quien entró y paso a la pantalla principal.
+        // Si falla, sumo un intento; al tercero bloqueo el botón.
         Button(
             onClick = {
+                if (bloqueado) return@Button
                 val db = BaseDatos(contexto)
                 if (db.verificar(usuario.trim(), clave)) {
                     db.guardarRegistro("Sesión iniciada: ${usuario.trim()}")
                     alIngresar(usuario.trim())
                 } else {
-                    error = "Usuario o contraseña incorrectos"
+                    intentos++
+                    if (intentos >= 3) {
+                        // Tercer intento fallido: bloqueo el ingreso y lo registro
+                        // como evento de seguridad en el historial.
+                        bloqueado = true
+                        error = "Máximo 3 intentos alcanzados. Acceso bloqueado."
+                        db.guardarRegistro("Acceso bloqueado: 3 intentos fallidos (${usuario.trim()})")
+                    } else {
+                        // Aviso cuántos intentos le quedan antes de bloquearse.
+                        error = "Usuario o contraseña incorrectos. Intentos restantes: ${3 - intentos}"
+                    }
                 }
             },
+            enabled = !bloqueado, // una vez bloqueado, el botón queda deshabilitado
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp)
         ) {
-            Text(text = "Ingresar", fontSize = 18.sp)
+            Text(text = if (bloqueado) "Acceso bloqueado" else "Ingresar", fontSize = 18.sp)
         }
     }
 }
