@@ -1,5 +1,6 @@
 package com.example.app
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -11,6 +12,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -23,9 +25,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 
 // Pantalla de Login: solo deja pasar a quien tenga usuario y contraseña válidos.
-// Si se equivocan 3 veces seguidas, bloqueo el ingreso (máximo 3 intentos)
+// Si se equivoca 3 veces seguidas bloqueo el ingreso con un tiempo que crece
+// cada vez: 5 minutos la primera vez, 15 la segunda, 45 la tercera (tope 60),
 // para que nadie pueda adivinar la contraseña probando una y otra vez.
 @Composable
 fun PantallaLogin(alIngresar: (String) -> Unit) {
@@ -36,14 +40,33 @@ fun PantallaLogin(alIngresar: (String) -> Unit) {
     var clave by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
 
-    // Contador de intentos fallidos: empieza en 0 y con 3 se bloquea.
-    // Como es "remember", el contador vuelve a 0 si se cierra la aplicación.
+    // Contador de intentos fallidos de la ronda actual: con 3 se bloquea.
+    // "bloqueos" cuenta cuántas veces se bloqueó ya, para subir el tiempo.
     var intentos by remember { mutableStateOf(0) }
-    var bloqueado by remember { mutableStateOf(false) }
+    var bloqueos by remember { mutableStateOf(0) }
+
+    // Momento en que se desbloquea (milisegundos desde 1970). 0 = sin bloqueo.
+    var bloqueadoHasta by remember { mutableStateOf(0L) }
+
+    // Cuenta regresiva que se muestra mientras dure el bloqueo.
+    var restante by remember { mutableStateOf("") }
+
+    val bloqueado = bloqueadoHasta > System.currentTimeMillis()
+
+    // Cada segundo recalculo cuánto falta para poder volver a intentar.
+    LaunchedEffect(bloqueadoHasta) {
+        while (bloqueadoHasta > System.currentTimeMillis()) {
+            val seg = ((bloqueadoHasta - System.currentTimeMillis()) / 1000).toInt()
+            restante = "${seg / 60}:${(seg % 60).toString().padStart(2, '0')}"
+            delay(1000)
+        }
+        restante = ""
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(Color(0xFF121212))
             .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -51,7 +74,8 @@ fun PantallaLogin(alIngresar: (String) -> Unit) {
         Text(
             text = "Control de Puerta",
             fontSize = 28.sp,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFFECECEC)
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -59,7 +83,7 @@ fun PantallaLogin(alIngresar: (String) -> Unit) {
         Text(
             text = "Inicia sesión para continuar",
             fontSize = 14.sp,
-            color = Color(0xFF616161)
+            color = Color(0xFF9E9E9E)
         )
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -70,6 +94,7 @@ fun PantallaLogin(alIngresar: (String) -> Unit) {
             onValueChange = { usuario = it },
             label = { Text("Usuario") },
             singleLine = true,
+            enabled = !bloqueado,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -80,16 +105,17 @@ fun PantallaLogin(alIngresar: (String) -> Unit) {
             onValueChange = { clave = it },
             label = { Text("Contraseña") },
             singleLine = true,
+            enabled = !bloqueado,
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth()
         )
 
-        // Si algo salió mal, muestro el error en rojo debajo de los campos.
+        // Si algo salió mal, muestro el error en rojo claro debajo de los campos.
         if (error.isNotEmpty()) {
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = error,
-                color = Color(0xFFC62828),
+                color = Color(0xFFEF9A9A),
                 fontSize = 14.sp
             )
         }
@@ -98,34 +124,53 @@ fun PantallaLogin(alIngresar: (String) -> Unit) {
 
         // Al presionar Ingresar: valido contra SQLite y, si coincide, registro
         // el evento de sesión con el nombre de quien entró y paso a la pantalla principal.
-        // Si falla, sumo un intento; al tercero bloqueo el botón.
+        // Si falla, sumo un intento; al tercero bloqueo con tiempo creciente.
         Button(
             onClick = {
-                if (bloqueado) return@Button
+                if (bloqueadoHasta > System.currentTimeMillis()) return@Button
                 val db = BaseDatos(contexto)
                 if (db.verificar(usuario.trim(), clave)) {
+                    // Entró bien: reinicio los contadores del bloqueo.
+                    intentos = 0
+                    bloqueos = 0
+                    bloqueadoHasta = 0
                     db.guardarRegistro("Sesión iniciada: ${usuario.trim()}")
                     alIngresar(usuario.trim())
                 } else {
+                    // Cada intento fallido queda guardado en el historial con el
+                    // usuario que se intentó usar, para que se pueda auditar.
                     intentos++
+                    db.guardarRegistro("Intento de sesión fallido: ${usuario.trim()} (intento $intentos de 3)")
                     if (intentos >= 3) {
-                        // Tercer intento fallido: bloqueo el ingreso y lo registro
+                        // Tercer fallo seguido: bloqueo con un tiempo que crece
+                        // 5, 15 y 45 minutos (después tope de 60) y lo registro
                         // como evento de seguridad en el historial.
-                        bloqueado = true
-                        error = "Máximo 3 intentos alcanzados. Acceso bloqueado."
-                        db.guardarRegistro("Acceso bloqueado: 3 intentos fallidos (${usuario.trim()})")
+                        bloqueos++
+                        var minutos = 5
+                        repeat(bloqueos - 1) { minutos *= 3 }
+                        minutos = minOf(minutos, 60)
+                        bloqueadoHasta = System.currentTimeMillis() + minutos * 60_000L
+                        intentos = 0
+                        error = "3 intentos fallidos. Acceso bloqueado durante $minutos minutos."
+                        db.guardarRegistro("Acceso bloqueado: $minutos minutos tras 3 intentos fallidos (${usuario.trim()})")
                     } else {
                         // Aviso cuántos intentos le quedan antes de bloquearse.
                         error = "Usuario o contraseña incorrectos. Intentos restantes: ${3 - intentos}"
                     }
                 }
             },
-            enabled = !bloqueado, // una vez bloqueado, el botón queda deshabilitado
+            enabled = !bloqueado, // mientras dure el bloqueo el botón queda deshabilitado
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp)
         ) {
-            Text(text = if (bloqueado) "Acceso bloqueado" else "Ingresar", fontSize = 18.sp)
+            Text(
+                text = when {
+                    bloqueado -> "Bloqueado ($restante)"
+                    else -> "Ingresar"
+                },
+                fontSize = 18.sp
+            )
         }
     }
 }
