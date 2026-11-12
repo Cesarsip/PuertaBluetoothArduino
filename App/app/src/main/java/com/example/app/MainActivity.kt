@@ -21,11 +21,19 @@ class MainActivity : ComponentActivity() {
                 // login; si tiene un nombre muestro la puerta y ese nombre es el que
                 // queda registrado en los eventos.
                 var usuarioSesion by remember { mutableStateOf("") }
+                var rolSesion by remember { mutableStateOf("") }
 
                 if (usuarioSesion.isNotEmpty()) {
-                    PantallaPuerta(usuario = usuarioSesion, onSalir = { usuarioSesion = "" })
+                    PantallaPuerta(
+                        usuario = usuarioSesion,
+                        rol = rolSesion,
+                        onSalir = { usuarioSesion = "" }
+                    )
                 } else {
-                    PantallaLogin(alIngresar = { usuarioSesion = it })
+                    PantallaLogin(alIngresar = { u, r ->
+                        usuarioSesion = u
+                        rolSesion = r
+                    })
                 }
             }
         }

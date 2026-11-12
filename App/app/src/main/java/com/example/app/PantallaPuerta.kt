@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.sp
 // indicador de la puerta, tarjeta con el último evento y los botones.
 // Todo sobrio y legible, sin animaciones llamativas.
 @Composable
-fun PantallaPuerta(usuario: String, onSalir: () -> Unit = {}) {
+fun PantallaPuerta(usuario: String, rol: String = "", onSalir: () -> Unit = {}) {
     val contexto = LocalContext.current
     val gestor = remember { GestorConexion(contexto.applicationContext) }
     val db = remember { BaseDatos(contexto) }
@@ -202,7 +202,7 @@ fun PantallaPuerta(usuario: String, onSalir: () -> Unit = {}) {
             ) {
                 Column {
                     Text(
-                        text = "Hola, $usuario",
+                        text = if (rol == "Administrador") "Hola, $usuario (Administrador)" else "Hola, $usuario",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFFECECEC)
@@ -216,7 +216,7 @@ fun PantallaPuerta(usuario: String, onSalir: () -> Unit = {}) {
 
                 // Al salir, registro el evento con el nombre de quien cerró sesión.
                 TextButton(onClick = {
-                    db.guardarRegistro("Sesión cerrada: $usuario")
+                    db.guardarRegistro("Sesión cerrada: $usuario ($rol)")
                     onSalir()
                 }) {
                     Text(text = "Salir", color = Color(0xFFBDBDBD))

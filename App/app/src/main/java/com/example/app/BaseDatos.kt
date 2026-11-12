@@ -13,26 +13,27 @@ import java.util.Locale
 
 // Mi base de datos local: guarda los usuarios (con la contraseña hasheada y su salt)
 // y todos los eventos de la puerta con su fecha y hora.
-class BaseDatos(context: Context) : SQLiteOpenHelper(context, "puerta.db", null, 3) {
+class BaseDatos(context: Context) : SQLiteOpenHelper(context, "puerta.db", null, 4) {
 
     // Se ejecuta la primera vez que se abre la base (o al subir la versión)
-    // y crea las dos tablas con las 3 cuentas del proyecto.
+    // y crea las dos tablas con las cuentas del proyecto.
     override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("CREATE TABLE usuarios (usuario TEXT PRIMARY KEY, clave TEXT, salt TEXT)")
+        db.execSQL("CREATE TABLE usuarios (usuario TEXT PRIMARY KEY, clave TEXT, salt TEXT, rol TEXT)")
         db.execSQL("CREATE TABLE registros (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, evento TEXT)")
 
-        // Creo las 3 cuentas, cada una con su contraseña distinta.
-        // A cada una le genero un salt aleatorio propio: así dos usuarios con la
-        // misma contraseña tendrían hashes distintos y no se pueden adivinar
-        // con tablas de hashes precalculadas.
-        insertarUsuario(db, "Cesar", "C3s@r#Puerta2026")
-        insertarUsuario(db, "Benjamin", "B3nj@m1n#IoT26")
-        insertarUsuario(db, "Mati", "M4t1#Control!26")
+        // Creo las 4 cuentas: una de administrador y las 3 de usuario.
+        // Cada una con su contraseña distinta y su propio salt aleatorio:
+        // así dos usuarios con la misma contraseña tendrían hashes distintos
+        // y no se pueden adivinar con tablas de hashes precalculadas.
+        insertarUsuario(db, "Administrador", "Adm1n#Puerta2026", "Administrador")
+        insertarUsuario(db, "Cesar", "C3s@r#Puerta2026", "Usuario")
+        insertarUsuario(db, "Benjamin", "B3nj@m1n#IoT26", "Usuario")
+        insertarUsuario(db, "Mati", "M4t1#Control!26", "Usuario")
     }
 
-    // Acá genero el salt, calculo el hash y lo guardo; y lo muestro en Logcat
-    // para poder ver el hasheo en vivo desde Android Studio.
-    private fun insertarUsuario(db: SQLiteDatabase, usuario: String, clave: String) {
+    // Acá genero el salt, calculo el hash y lo guardo con el rol del usuario;
+    // y lo muestro en Logcat para poder ver el hasheo en vivo desde Android Studio.
+    private fun insertarUsuario(db: SQLiteDatabase, usuario: String, clave: String, rol: String) {
         val salt = generarSalt()
         val hash = cifrar(clave, salt)
 
@@ -40,6 +41,7 @@ class BaseDatos(context: Context) : SQLiteOpenHelper(context, "puerta.db", null,
         values.put("usuario", usuario)
         values.put("clave", hash)
         values.put("salt", salt)
+        values.put("rol", rol)
         db.insert("usuarios", null, values)
 
         // Formato de Logcat: Usuario | Nuevo Salt | Hash SHA-256
@@ -76,6 +78,18 @@ class BaseDatos(context: Context) : SQLiteOpenHelper(context, "puerta.db", null,
         Log.d("LoginHash", "Usuario: $usuario | Nuevo Salt: $salt | Hash SHA-256: $hashCalculado")
 
         return hashGuardado == hashCalculado
+    }
+
+    // Devuelvo el rol guardado para el usuario (Administrador o Usuario).
+    // Si no existe, devuelvo vacío.
+    fun obtenerRol(usuario: String): String {
+        val cursor = readableDatabase.rawQuery(
+            "SELECT rol FROM usuarios WHERE usuario = ?",
+            arrayOf(usuario)
+        )
+        val rol = if (cursor.moveToFirst()) cursor.getString(0) else ""
+        cursor.close()
+        return rol
     }
 
     // Genero un salt aleatorio de 16 bytes (32 caracteres en hexadecimal).

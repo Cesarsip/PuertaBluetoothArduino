@@ -8,7 +8,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,7 +28,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -32,13 +40,17 @@ import kotlinx.coroutines.delay
 // cada vez: 5 minutos la primera vez, 15 la segunda, 45 la tercera (tope 60),
 // para que nadie pueda adivinar la contraseña probando una y otra vez.
 @Composable
-fun PantallaLogin(alIngresar: (String) -> Unit) {
+fun PantallaLogin(alIngresar: (String, String) -> Unit) {
     val contexto = LocalContext.current
 
     // Guardo lo que se escribe en los campos y el mensaje de error si falla el login.
     var usuario by remember { mutableStateOf("") }
     var clave by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
+
+    // Ojito del campo contraseña: alterna entre mostrar la clave en texto plano
+    // o dejarla oculta con puntos, como en cualquier app de verdad.
+    var mostrarClave by remember { mutableStateOf(false) }
 
     // Contador de intentos fallidos de la ronda actual: con 3 se bloquea.
     // "bloqueos" cuenta cuántas veces se bloqueó ya, para subir el tiempo.
@@ -88,10 +100,14 @@ fun PantallaLogin(alIngresar: (String) -> Unit) {
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Los dos campos del login; el de la contraseña va con puntos para que no se lea.
+        // Los dos campos del login. El de contraseña va con teclado de contraseña,
+        // puntos para que no se lea y un ojito para mostrarla si hace falta.
         OutlinedTextField(
             value = usuario,
-            onValueChange = { usuario = it },
+            onValueChange = {
+                usuario = it
+                error = ""
+            },
             label = { Text("Usuario") },
             singleLine = true,
             enabled = !bloqueado,
@@ -102,11 +118,37 @@ fun PantallaLogin(alIngresar: (String) -> Unit) {
 
         OutlinedTextField(
             value = clave,
-            onValueChange = { clave = it },
+            onValueChange = {
+                clave = it
+                error = ""
+            },
             label = { Text("Contraseña") },
             singleLine = true,
             enabled = !bloqueado,
-            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            visualTransformation = if (mostrarClave) {
+                VisualTransformation.None
+            } else {
+                PasswordVisualTransformation()
+            },
+            trailingIcon = {
+                // Al tocar el ojito cambio entre ver y ocultar la contraseña.
+                IconButton(onClick = { mostrarClave = !mostrarClave }) {
+                    Icon(
+                        imageVector = if (mostrarClave) {
+                            Icons.Filled.VisibilityOff
+                        } else {
+                            Icons.Filled.Visibility
+                        },
+                        contentDescription = if (mostrarClave) {
+                            "Ocultar contraseña"
+                        } else {
+                            "Mostrar contraseña"
+                        },
+                        tint = Color(0xFF9E9E9E)
+                    )
+                }
+            },
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -130,12 +172,14 @@ fun PantallaLogin(alIngresar: (String) -> Unit) {
                 if (bloqueadoHasta > System.currentTimeMillis()) return@Button
                 val db = BaseDatos(contexto)
                 if (db.verificar(usuario.trim(), clave)) {
-                    // Entró bien: reinicio los contadores del bloqueo.
+                    // Entró bien: reinicio los contadores del bloqueo y
+                    // paso a la pantalla principal el usuario y su rol.
                     intentos = 0
                     bloqueos = 0
                     bloqueadoHasta = 0
-                    db.guardarRegistro("Sesión iniciada: ${usuario.trim()}")
-                    alIngresar(usuario.trim())
+                    val rol = db.obtenerRol(usuario.trim())
+                    db.guardarRegistro("Sesión iniciada: ${usuario.trim()} ($rol)")
+                    alIngresar(usuario.trim(), rol)
                 } else {
                     // Cada intento fallido queda guardado en el historial con el
                     // usuario que se intentó usar, para que se pueda auditar.
