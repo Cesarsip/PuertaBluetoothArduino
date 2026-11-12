@@ -27,11 +27,15 @@ Unidad 2, curso *Aplicaciones Móviles Android*.
 
 ## Credenciales
 
-| Usuario | Contraseña |
-|---------|------------|
-| Cesar | `C3s@r#Puerta2026` |
-| Benjamin | `B3nj@m1n#IoT26` |
-| Mati | `M4t1#Control!26` |
+| Usuario | Rol | Contraseña |
+|---------|-----|------------|
+| Administrador | Administrador | `Adm1n#Puerta2026` |
+| Cesar | Usuario | `C3s@r#Puerta2026` |
+| Benjamin | Usuario | `B3nj@m1n#IoT26` |
+| Mati | Usuario | `M4t1#Control!26` |
+
+La tabla `usuarios` incluye la columna `rol` (Administrador o Usuario) y el evento de
+sesión guarda el rol de quien entra.
 
 ## Estructura del repositorio
 
